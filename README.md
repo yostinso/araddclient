@@ -44,6 +44,26 @@ v6_method=ifaddr        # ifaddr (default), icanhazip, or a custom function.
 v6_if=eth0              # The interface to get an IP from when using ifaddr
 ```
 
+### Minimal IPv4-only config
+```sh
+server=api.cloudflare.com/client/v4
+login=your@email.here
+password=aaabbbeeefffccceeefff
+zone=myserver.com
+hosts="myserver.com"
+```
+
+### Minimal config for IPv4 & IPv6
+```sh
+server=api.cloudflare.com/client/v4
+login=your@email.here
+password=aaabbbeeefffccceeefff
+zone=myserver.com
+hosts="myserver.com"
+use_v6=yes
+v6_if=eth0
+```
+
 ### Custom IP discovery
 For either `v4_method` or `v6_method`, you can supply a custom function. This is possible because the 
 config file is just loaded with `bash`'s `source` keyword. The method will be passed "4" or "6" as the
