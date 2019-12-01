@@ -1,0 +1,25 @@
+araddclient(8) -- a dynamic DNS client for Cloudflare A/AAAA records
+====================================================================
+
+## SYNOPSIS
+
+`./araddclient` [-v] [-v] [-v] [-f] config.conf
+
+## DESCRIPTION
+
+A dynamic DNS client for Cloudflare A/AAAA records using bash, jq, and curl.
+
+
+## OPTIONS
+
+Any other option besides those below is assumed to be the config file.
+
+  * `-v`:
+    Verbose output. Level 3 includes API debugging and therefore passwords.
+
+  * `-f`:
+    Force update regardless of age or matching IP
+
+## SEE ALSO
+
+araddclient.conf(8)

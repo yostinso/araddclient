@@ -1,0 +1,79 @@
+araddclient.conf(8) -- configuration for araddclient(8)
+====================================================================
+
+## SYNOPSIS
+
+`/etc/araddclient.conf` is the default location.
+
+## EXAMPLES
+
+### Complete configuration options
+
+```
+# Cloudflare server (probably never changes)
+server=api.cloudflare.com/client/v4
+
+# Cloudflare credentials (email and auth key)
+login=your@email.here
+password=aaabbbeeefffccceeefff
+
+# Cloudflare zone your records live in
+zone=myserver.com
+# Space-separated list of host records to update
+hosts="myserver.com www.myserver.com"
+
+# Configuring updates
+update_frequency=300    # How frequently to send an IP update (when changed); default is 300 seconds.
+state_dir=/tmp          # Where to store state; default is /var/lib/araddclient.
+
+use_v4=yes              # Attempt to update A records. Default yes.
+v4_method=icanhazip     # icanhazip (default), meraki, or a custom function.
+
+use_v6=no               # Attempt to update AAAA records. Default no.
+v6_method=ifaddr        # ifaddr (default), icanhazip, or a custom function.
+v6_if=eth0              # The interface to get an IP from when using ifaddr
+```
+
+### Minimal IPv4-only config
+
+```
+server=api.cloudflare.com/client/v4
+login=your@email.here
+password=aaabbbeeefffccceeefff
+zone=myserver.com
+hosts="myserver.com"
+```
+
+### Minimal config for IPv4 & IPv6
+
+```
+server=api.cloudflare.com/client/v4
+login=your@email.here
+password=aaabbbeeefffccceeefff
+zone=myserver.com
+hosts="myserver.com"
+use_v6=yes
+v6_if=eth0
+```
+
+### Custom IP discovery
+
+For either `v4_method` or `v6_method`, you can supply a custom function. This is possible because the 
+config file is just loaded with `bash`'s `source` keyword. The method will be passed "4" or "6" as the
+first argument, depending on the protocol.
+
+For example:
+
+```
+v4_method=mymethod
+mymethod()
+{
+  local protocol_ver="$1"
+  echo "Magic custom method" >&2  # only log to stderr
+  curl -s http://10.0.0.1/index.json | jq -r ".result.${protocol_ver}.ip"
+}
+```
+
+## SEE ALSO
+
+araddclient(8)

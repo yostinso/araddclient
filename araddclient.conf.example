@@ -1,0 +1,13 @@
+# Config. Supply Cloudflare credentials
+
+server=api.cloudflare.com/client/v4
+login=email@example.com
+password='<password>'
+zone=example.com
+hosts=example.com
+update_frequency=300 # seconds
+
+use_v4=yes
+v4_method=meraki
+use_v6=yes
+v6_if=eth0
