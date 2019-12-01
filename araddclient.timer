@@ -1,0 +1,10 @@
+[Unit]
+Description=araddclient dynamic DNS client for Cloudflare (periodic timer)
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Timer]
+Unit=araddclient.service
+OnUnitActiveSec=5m

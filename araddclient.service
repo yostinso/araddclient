@@ -1,0 +1,12 @@
+[Unit]
+Description=araddclient dynamic DNS client for Cloudflare
+Documentation=man:araddclient(8)
+Documentation=https://github.com/yostinso/araddclient
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/araddclient /etc/araddclient.conf
