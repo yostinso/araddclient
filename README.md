@@ -8,10 +8,10 @@ At a minimum, this script requires `bash`, `curl`, and `jq` (for parsing Cloudfl
 
 ## From the help
 ```
-client.sh -- dynamic DNS client for v4/v6 updates to Cloudflare
+araddclient -- dynamic DNS client for v4/v6 updates to Cloudflare
 
 Usage:
-  ./client.sh [-v] [-v] [-v] [-f] config.conf
+  ./araddclient [-v] [-v] [-v] [-f] config.conf
 
         Uses config.conf in the script's folder by default.
   -v    Verbose output. Level 3 includes API debugging and therefore passwords.
@@ -35,6 +35,7 @@ hosts="myserver.com www.myserver.com"
 
 # Configuring updates
 update_frequency=300    # How frequently to send an IP update (when changed); default is 300 seconds.
+state_dir=/tmp          # Where to store state; default is /var/lib/araddclient.
 
 use_v4=yes              # Attempt to update A records. Default yes.
 v4_method=icanhazip     # icanhazip (default), meraki, or a custom function.

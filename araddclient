@@ -3,10 +3,10 @@
 help()
 {
   echo "" >&2
-  echo "client.sh -- dynamic DNS client for v4/v6 updates to Cloudflare" >&2
+  echo "araddclient -- dynamic DNS client for v4/v6 updates to Cloudflare" >&2
   echo "" >&2
   echo "Usage:" >&2
-  echo "  ./client.sh [-v] [-v] [-v] [-f] config.conf" >&2
+  echo "  ./araddclient [-v] [-v] [-v] [-f] config.conf" >&2
   echo ""
   echo "        Uses config.conf in the script's folder by default."
   echo "  -v    Verbose output. Level 3 includes API debugging and therefore passwords." >&2
@@ -15,8 +15,12 @@ help()
   echo "# Example config" >&2
   echo "server=api.cloudflare.com/client/v4" >&2
   echo "login=your@email.here" >&2
+  echo "state_dir=/tmp          # Where to store state (default /var/lib/araddclient)" >&2
+  echo "update_frequency=300    # How frequently to send an IP update (when changed); default is 300 seconds." >&2
+  echo "" >&2
   echo "zone=myserver.com" >&2
   echo "hosts=\"myserver.com www.myserver.com\"" >&2
+  echo "" >&2
   echo "use_v4=yes              # Attempt to update A records. Default yes." >&2
   echo "v4_method=icanhazip     # Use icanhazip for public IPv4 address. Default icanhazip." >&2
   echo "                        # You can also specify 'meraki' or a custom function, see below." >&2
@@ -24,7 +28,6 @@ help()
   echo "v6_method=ifaddr        # Use the local interface non-private IP (recommended)." >&2
   echo "                        # You can also specify 'icanhazip' or a custom function, see below." >&2
   echo "v6_if=eth0              # Required if v6_method=ifaddr; which interface to inspect?" >&2
-  echo "update_frequency=300    # How frequently to send an IP update (when changed); default is 300 seconds." >&2
   echo "" >&2
   echo "# For custom sources of IPv4, define a function:" >&2
   echo "v4_method=mymethod" >&2
@@ -51,6 +54,7 @@ load_conf()
   . "$conf"
   if [[ $? -ne 0 ]]; then return $?; fi
   update_frequency=${update_frequency:-300}
+  state_dir=${state_dir:-/var/lib/araddclient}
   use_v4=${use_v4:-yes}
   v4_method=${v4_method:-icanhazip}
   v6_method=${v6_method:-ifaddr}
@@ -117,7 +121,7 @@ meraki()
     gw=$(ip --oneline -4 route list default | awk '{ print $3 }')
   fi
   if [[ ! -z $gw ]]; then
-    if [ $verbose -gt 1 ]; then echo "  Using Meraki gateway $gw" >&2; fi
+    if [[ $verbose -gt 1 ]]; then echo "  Using Meraki gateway $gw" >&2; fi
     curl -s 'http://192.168.2.1/index.json' | jq -r '.connection_state.wired_uplinks[0].ip'
   else
     echo "Couldn't get IP from Meraki gateway." >&2
@@ -201,7 +205,7 @@ touch_host()
   local host_name="$1"
   local record_type="$2"
   local addr="$3"
-  echo "$addr" > last_update/${host_name}_${record_type}.last
+  echo "$addr" > "${state_dir}/${host_name}_${record_type}.last"
 }
 
 should_update()
@@ -209,7 +213,7 @@ should_update()
   local host_name="$1"
   local record_type="$2"
   local addr="$3"
-  local filename="last_update/${host_name}_${record_type}.last"
+  local filename="${state_dir}/${host_name}_${record_type}.last"
   local touched_at=0
   local last_addr=""
   if [[ -f "$filename" ]]; then
