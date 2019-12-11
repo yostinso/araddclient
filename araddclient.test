@@ -1,0 +1,237 @@
+#!/bin/bash
+
+. ./araddclient
+
+v6_re='^(([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(([0-9a-f]{1,4}:)+)((:[0-9a-f]{1,4})+))$'
+
+printout()
+{
+  local test="$1"
+  test=${test:12}
+  local result="$2"
+  local pad="$test                      "
+  echo "${pad:0:-${#test}} $result"
+}
+
+ok_stub_method()
+{
+  echo "stubbed $@"
+  return 99
+}
+
+empty_stub_method()
+{
+  return 99
+}
+
+araddclient_test_help()
+{
+  print_help 2>&1 | grep '^Usage' || return 2
+  return 0
+}
+
+araddclient_test_minimal_conf()
+{
+  local t=$(mktemp)
+  local res
+  local conf="
+server=AA
+login=BB
+password=CC
+zone=DD
+hosts=\"EE FF\"
+  "
+  for var in server login password zone hosts; do
+    echo "$conf" | grep -v "^$var=" > "$t"
+    load_conf "$t" 2>&1 | grep "Missing.*: $var"
+    res=$?
+    if [[ $res -ne 0 ]]; then
+      lasterr="Didn't catch missing config $var"
+      return -1
+    fi
+  done
+
+  echo "$conf" > "$t"
+  load_conf "$t"
+  res=$?
+  rm "$t"
+  [[ $res -eq 0 ]] || { lasterr="Failed to parse config" && return 1; }
+  [[ "$server"          == "AA" ]] || { lasterr="Failed to parse server" && return 1; }
+  [[ "$login"           == "BB" ]] || { lasterr="Failed to parse login" && return 1; }
+  [[ "$password"        == "CC" ]] || { lasterr="Failed to parse password" && return 1; }
+  [[ "$zone"            == "DD" ]] || { lasterr="Failed to parse zone" && return 1; }
+  [[ "$hosts"           == "EE FF" ]] || { lasterr="Failed to parse hosts" && return 1; }
+  return 0
+}
+
+araddclient_test_v4_conf()
+{
+  local res
+  local conf="
+  server=AA; login=BB; password=CC; zone=DD; hosts=\"EE FF\"
+  "
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  load_conf "$t"
+  rm "$t"
+  [[ "$use_v4"    == "yes" ]] ||        { lasterr="Invalid default use_v4" && return 1; }
+  [[ "$v4_method" == "icanhazip" ]] ||  { lasterr="Invalid default v4_method" && return 1; }
+
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  echo "use_v4=no; v4_method=meraki" >> "$t"
+  load_conf "$t"
+  rm "$t"
+  [[ "$use_v4"    == "no" ]] ||     { lasterr="Failed to override use_v4" && return 1; }
+  [[ "$v4_method" == "meraki" ]] || { lasterr="Failed to override v4_method" && return 1; }
+
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  echo "v4_method=wut" >> "$t"
+  load_conf "$t" 2>&1 | grep "Invalid v4_method" >/dev/null
+  res=$?
+  rm "$t"
+  [[ $res -ne 0 ]] && { lasterr="Allowed invalid v4_method" && return 1; }
+
+  return 0
+}
+
+araddclient_test_v6_conf()
+{
+  local res
+  local conf="
+  server=AA; login=BB; password=CC; zone=DD; hosts=\"EE FF\"
+  "
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  echo "v6_if=eth0" >> "$t"
+  load_conf "$t"
+  rm "$t"
+  [[ "$use_v6"    != "yes" ]] ||     { lasterr="Invalid default use_v6" && return 1; }
+  [[ "$v6_method" == "ifaddr" ]] ||  { lasterr="Invalid default v6_method" && return 1; }
+  [[ "$v6_if" == "eth0" ]] ||        { lasterr="Failed to set v6_if" && return 1; }
+
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  echo "use_v6=yes; v6_method=icanhazip" >> "$t"
+  load_conf "$t"
+  rm "$t"
+  [[ "$use_v6"    == "yes" ]] ||       { lasterr="Failed to override use_v6" && return 1; }
+  [[ "$v6_method" == "icanhazip" ]] || { lasterr="Failed to override v6_method" && return 1; }
+
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  echo "use_v6=yes; v6_method=wut" >> "$t"
+  load_conf "$t" 2>&1 | grep "Invalid v6_method" >/dev/null
+  res=$?
+  rm "$t"
+  [[ $res -ne 0 ]] && { lasterr="Allowed invalid v6_method" && return 1; }
+
+  local t=$(mktemp)
+  echo "$conf" > "$t"
+  echo "use_v6=yes; v6_method=ifaddr" >> "$t"
+
+  load_conf "$t" 2>&1 | grep "use_v6.*requires v6_if"
+  res=$?
+  rm "$t"
+  [[ $res -ne 0 ]] && { lasterr="Allowed v6_method=ifaddr without v6_if defined" && return 1; }
+
+  return 0
+}
+
+araddclient_slow_test_icanhazipv4()
+{
+  local ip=$(icanhazip 4)
+  echo "$ip" | grep -P '^(\d+\.){3}\d+$' || {
+    lasterr="Didn't get an IPv4 address with icanhazip. Got $ip" && return 1;
+  }
+  return 0
+}
+
+araddclient_slow_test_icanhazipv6()
+{
+  local ip=$(icanhazip 6)
+  echo "$ip" | grep -P "$v6_re" || {
+    lasterr="Didn't get an IPv4 address with icanhazip. Got $ip" && return 1;
+  }
+  return 0
+}
+
+araddclient_slow_test_meraki()
+{
+  local ip=$(meraki 4)
+  echo "$ip" | grep -P '^(\d+\.){3}\d+$' || {
+    lasterr="Didn't get an IPv4 address with meraki. Got $ip" && return 1;
+  }
+  return 0
+}
+
+araddclient_test_ifaddr()
+{
+  v6_if="br0"
+  local ip=$(ifaddr)
+  echo "$ip" | grep -P "$v6_re" || {
+    lasterr="Didn't get an IPv6 address with ifaddr. Got $ip" && return 1;
+  }
+  return 0
+}
+
+araddclient_test_get_ipv4()
+{
+  v4_method=ok_stub_method
+  local val=$(get_ipv4)
+  [[ "$val" == "stubbed 4" ]] || {
+    lasterr="Failed to call v4_method in get_ipv4 and return the result" &&
+    return 1;
+  }
+
+  v4_method=empty_stub_method
+  val=$(get_ipv4)
+  local res=$?
+  
+  [[ -z "$val" && $res -eq 1 ]] || {
+    lasterr="Got an unexpected response for a failed get_ipv4: $val, $res" &&
+    return 1;
+  }
+}
+
+araddclient_test_get_ipv6()
+{
+  v6_method=ok_stub_method
+  local val=$(get_ipv6)
+  [[ "$val" == "stubbed 6" ]] || {
+    lasterr="Failed to call v6_method in get_ipv6 and return the result" &&
+    return 1;
+  }
+
+  v6_method=empty_stub_method
+  val=$(get_ipv6)
+  local res=$?
+  
+  [[ -z "$val" && $res -eq 1 ]] || {
+    lasterr="Got an unexpected response for a failed get_ipv6: $val, $res" &&
+    return 1;
+  }
+}
+
+echo "RUN tests" >&2
+tests=$(set | grep '^araddclient_test_.*()' | awk '{ print $1 }')
+#slow_tests=$(set | grep '^araddclient_slow_test_.*()' | awk '{ print $1 }')
+slow_tests="araddclient_slow_test_meraki"
+
+if [[ "$1" == "-s" ]]; then
+  tests="$tests $slow_tests"
+fi
+
+for t in $tests; do
+  lasterr=""
+  $t >/dev/null
+  res=$?
+  if [[ $res -ne 0 ]]; then
+    printout "$t" "FAILED: ${lasterr:-$res}"
+  else
+    printout "$t" "SUCCESS"
+  fi
+done
+echo "DONE tests" >&2
+echo "" >&2
