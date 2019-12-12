@@ -14,7 +14,7 @@ help()
   echo "Usage:" >&2
   echo "  ./build.sh [-u] [-r] [-v n.nn]" >&2
   echo ""
-  echo "  -r    Update the release tag to point to HEAD" >&2
+  echo "  -r    Create new version at HEAD and update the release tag" >&2
   echo "  -u    Don't delete the build folder before running" >&2
   echo "  -v    Increment the version by n.nn instead of $version_increment" >&2
   echo ""
@@ -25,7 +25,6 @@ parse_args()
   while (( "$#" )); do
     case $1 in
       -r)
-        echo "DERP DERP"
         set_release_tag=1
         shift
         ;;
@@ -180,7 +179,7 @@ do_prepare()
 
   cp -v $files "$dir/"
   for f in $manpages; do
-    ronn < "docs/${f}.ronn" > "$dir/$f" 2>/dev/null
+    ronn < "docs/${f}.ronn" > "$dir/$f" 2>/dev/null || return 0
     ls "$dir/$f"
   done
 }
@@ -195,7 +194,10 @@ do_dh_make()
       DEBFULLNAME="$DEBFULLNAME" \
       dh_make --copyright gpl -i --createorig
   )
-
+  [[ -f "$debdir/README.Debian" ]] || {
+    echo "dh_make aborted or failed";
+    return 1;
+  }
   rm "$debdir/README.Debian"
   if [[ ! -f "$debdir/control.ex" ]]; then
     cp "$debdir/control" "$debdir/control.ex"
@@ -233,33 +235,34 @@ manpages="araddclient.8 araddclient.conf.8"
 version=$(get_build_version)
 dir="$prefix-$version"
 debdir="$dir/debian"
-do_prepare "$version" "$dir" "$files" "$manpages"
+do_prepare "$version" "$dir" "$files" "$manpages" || exit
 
 # Docs
-do_dh_make "$dir" "$debdir"
-cp README.md "$debdir/README.source"
-generate_docs > "$debdir/araddclient-docs.docs"
+do_dh_make "$dir" "$debdir" || exit
+cp README.md "$debdir/README.source" || exit
+generate_docs > "$debdir/araddclient-docs.docs" || exit
 
 # Static package scripts
-cp pkg/* "$debdir/"
+cp pkg/* "$debdir/" || exit
 
 # Other files
-generate_changelog > "$debdir/changelog"
-generate_control > "$debdir/control"
-generate_rules > "$debdir/rules"
+generate_changelog > "$debdir/changelog" || exit
+generate_control > "$debdir/control" || exit
+generate_rules > "$debdir/rules" || exit
 
+gpg-agent || gpg-agent --daemon
 # Generate build
 (cd "$dir" &&
   rm debian/*.ex # Clean up example files
   DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -I -i" \
   DEBUILD_LINTIAN_OPTS="-i -I --show-overrides --profile debian" \
   debuild
-)
+) || exit
 
 # Clean up root folder and move generated files into debbuild
-relocate_build $(dirname "$0") "$version"
+relocate_build $(dirname "$0") "$version" || exit
 
 if [[ "$set_release_tag" ]]; then
-  git tag v$version HEAD
-  git tag -f release HEAD
+  git tag v$version HEAD || exit
+  git tag -f release HEAD || exit
 fi
