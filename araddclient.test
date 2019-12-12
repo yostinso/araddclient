@@ -4,12 +4,32 @@
 
 v6_re='^(([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(([0-9a-f]{1,4}:)+)((:[0-9a-f]{1,4})+))$'
 
+parse_args()
+{
+  while (( "$#" )); do
+    case $1 in
+      -s|--slow-tests)
+        run_slow_tests=1
+        shift
+        ;;
+      -t|--test-only)
+        test_only=$2
+        shift 2
+        ;;
+      *)
+        echo "Invalid option $1"
+        exit
+        ;;
+    esac
+  done
+}
+
 printout()
 {
   local test="$1"
-  test=${test:12}
+  test=${test:4}
   local result="$2"
-  local pad="$test                      "
+  local pad="$test                                  "
   echo "${pad:0:-${#test}} $result"
 }
 
@@ -24,13 +44,13 @@ empty_stub_method()
   return 99
 }
 
-araddclient_test_help()
+ara_test_help()
 {
   print_help 2>&1 | grep '^Usage' || return 2
   return 0
 }
 
-araddclient_test_minimal_conf()
+ara_test_minimal_conf()
 {
   local t=$(mktemp)
   local res
@@ -64,7 +84,7 @@ hosts=\"EE FF\"
   return 0
 }
 
-araddclient_test_v4_conf()
+ara_test_v4_conf()
 {
   local res
   local conf="
@@ -96,7 +116,7 @@ araddclient_test_v4_conf()
   return 0
 }
 
-araddclient_test_v6_conf()
+ara_test_v6_conf()
 {
   local res
   local conf="
@@ -139,7 +159,7 @@ araddclient_test_v6_conf()
   return 0
 }
 
-araddclient_slow_test_icanhazipv4()
+ara_slow_test_icanhazipv4()
 {
   local ip=$(icanhazip 4)
   echo "$ip" | grep -P '^(\d+\.){3}\d+$' || {
@@ -148,7 +168,7 @@ araddclient_slow_test_icanhazipv4()
   return 0
 }
 
-araddclient_slow_test_icanhazipv6()
+ara_slow_test_icanhazipv6()
 {
   local ip=$(icanhazip 6)
   echo "$ip" | grep -P "$v6_re" || {
@@ -157,7 +177,7 @@ araddclient_slow_test_icanhazipv6()
   return 0
 }
 
-araddclient_slow_test_meraki()
+ara_slow_test_meraki()
 {
   local ip=$(meraki 4)
   echo "$ip" | grep -P '^(\d+\.){3}\d+$' || {
@@ -166,7 +186,7 @@ araddclient_slow_test_meraki()
   return 0
 }
 
-araddclient_test_ifaddr()
+ara_test_ifaddr()
 {
   v6_if="br0"
   local ip=$(ifaddr)
@@ -176,7 +196,7 @@ araddclient_test_ifaddr()
   return 0
 }
 
-araddclient_test_get_ipv4()
+ara_test_get_ipv4()
 {
   v4_method=ok_stub_method
   local val=$(get_ipv4)
@@ -195,7 +215,7 @@ araddclient_test_get_ipv4()
   }
 }
 
-araddclient_test_get_ipv6()
+ara_test_get_ipv6()
 {
   v6_method=ok_stub_method
   local val=$(get_ipv6)
@@ -214,13 +234,236 @@ araddclient_test_get_ipv6()
   }
 }
 
-echo "RUN tests" >&2
-tests=$(set | grep '^araddclient_test_.*()' | awk '{ print $1 }')
-#slow_tests=$(set | grep '^araddclient_slow_test_.*()' | awk '{ print $1 }')
-slow_tests="araddclient_slow_test_meraki"
+ara_test_call_api()
+{
+  login=AA
+  password=BB
+  curl() { echo "$@"; }
+  local args=$(call_api "suffix" "POST" "Some data")
+  unset curl
 
-if [[ "$1" == "-s" ]]; then
+  # Note: quotes aren't captured because that's annoying in bash :(
+  [[ "$args" =~ "-X POST" ]] || { lasterr="Failed to set method"; return 1; }
+  [[ "$args" =~ "-H X-Auth-Email: AA" ]] || { lasterr="Failed to set username"; return 1; }
+  [[ "$args" =~ "-H X-Auth-Key: BB" ]] || { lasterr="Failed to set password"; return 1; }
+  [[ "$args" =~ "-H Content-Type: application/json" ]] || { lasterr="Failed to set Content-Type"; return 1; }
+  [[ "$args" =~ "--data Some data" ]] || { lasterr="Failed to set data"; return 1; }
+}
+
+ara_test_touch_host()
+{
+  state_dir=$(mktemp -d)
+  touch_host "my.host" "AAAA" "address"
+  local content=$(cat "$state_dir/my.host_AAAA.last" 2>/dev/null || echo "No state file created")
+  rm -r "$state_dir"
+  unset state_dir
+  [[ "$content" == "address" ]] || {
+    lasterr="Bad state file content: $content" &&
+    return 1;
+  }
+}
+
+ara_test_should_update_no_file()
+{
+  state_dir=$(mktemp -d)
+  verbose=1
+  local out
+  out=$(should_update "my.host" "AAAA" "address" 2>&1)
+  local res=$?
+  rm -r "$state_dir"
+  unset state_dir verbose
+
+  [[ "$out" =~ "my.host AAAA is "([[:digit:]]+)" seconds old" ]] || {  lasterr="Failed to log age"; return 1; }
+  local age="${BASH_REMATCH[1]}"
+  [[ $age -gt 1000 ]] || { lasterr="Got an unexpectedly young age"; return 1; }
+  [[ $res -eq 0 ]] || { lasterr="Didn't get expected true response"; return 1; }
+}
+
+ara_test_should_update_young_file()
+{
+  state_dir=$(mktemp -d)
+  touch_host "my.host" "AAAA" "address"
+  verbose=1
+  local out
+  local res=0
+  out=$(should_update "my.host" "AAAA" "address" 2>&1)
+  res=$?
+  rm -r "$state_dir"
+  unset state_dir verbose
+
+  [[ "$out" =~ "my.host AAAA is "([[:digit:]]+)" seconds old" ]] || { lasterr="Failed to log age"; return 1; }
+  local age="${BASH_REMATCH[1]}"
+  [[ $age -lt 10 ]] || { lasterr="Got an unexpectedly old age"; return 1; }
+  [[ $res -ne 0 ]] || { lasterr="Didn't get expected false response"; return 1; }
+}
+
+ara_test_should_update_old_file()
+{
+  state_dir=$(mktemp -d)
+  touch_host "my.host" "AAAA" "address"
+  touch -d "2000-01-01" "${state_dir}/my.host_AAAA.last"
+  verbose=1
+  local out
+  local res=0
+  out=$(should_update "my.host" "AAAA" "address" 2>&1)
+  res=$?
+  rm -r "$state_dir"
+  unset state_dir verbose
+
+  [[ "$out" =~ "my.host AAAA is "([[:digit:]]+)" seconds old" ]] || { lasterr="Failed to log age"; return 1; }
+  local age="${BASH_REMATCH[1]}"
+  [[ $age -gt 1000 ]] || { lasterr="Got an unexpectedly young age"; return 1; }
+  [[ $res -ne 0 ]] || { lasterr="Didn't get expected false response"; return 1; }
+}
+
+ara_test_should_update_new_address()
+{
+  state_dir=$(mktemp -d)
+  touch_host "my.host" "AAAA" "OTHER ADDRESS"
+  touch -d "2000-01-01" "${state_dir}/my.host_AAAA.last"
+  verbose=1
+  local res=0
+  out=$(should_update "my.host" "AAAA" "address" 2>&1)
+  res=$?
+  rm -r "$state_dir"
+  unset state_dir verbose
+
+  [[ "$out" =~ "my.host AAAA is "([[:digit:]]+)" seconds old" ]] || {  lasterr="Failed to log age"; return 1; }
+  local age="${BASH_REMATCH[1]}"
+  [[ $res -eq 0 ]] || { lasterr="Didn't get expected true response"; return 1; }
+}
+
+ara_test_should_update_force()
+{
+  state_dir=$(mktemp -d)
+  force_update=1
+  touch_host "my.host" "AAAA" "address"
+  verbose=1
+  local out
+  local res=0
+  out=$(should_update "my.host" "AAAA" "address" 2>&1)
+  res=$?
+  rm -r "$state_dir"
+  unset state_dir verbose
+  unset force_update
+
+  [[ "$out" =~ "my.host AAAA is "([[:digit:]]+)" seconds old" ]] || { lasterr="Failed to log age"; return 1; }
+  local age="${BASH_REMATCH[1]}"
+  [[ $age -lt 10 ]] || { lasterr="Got an unexpectedly old age"; return 1; }
+  [[ $res -eq 0 ]] || { lasterr="Didn't get expected false response"; return 1; }
+}
+
+ara_test_get_record()
+{
+  local res
+  local err
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    call_api() {
+      echo '{ "result": [ { "id": "'"$@"'" } ] }'
+    }
+    out=$(get_record my.zone AAAA my.host)
+    [[ $out == "zones/my.zone/dns_records?type=AAAA&name=my.host" ]] || { echo "Bad URL: $out"; return 1; }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+ara_test_get_zone()
+{
+  local res
+  local err
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    call_api() {
+      echo '{ "result": [ { "id": "'"$@"'" } ] }'
+    }
+    out=$(get_zone my.zone)
+    [[ $out == "zones?name=my.zone" ]] || { echo "Bad URL: $out"; return 1; }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+ara_test_update_record()
+{
+  local res
+  local err
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    should_update() { return 0; }
+    get_record() { echo "123"; }
+    call_api() { echo '{ "success": true }'; }
+    touch_host() { return 0; }
+    out=$(update_record my.zone my.host address AAAA 2>&1)
+
+    [[ "$out" =~ "Zone: my.zone"[[:space:]]*"Host: 123"[[:space:]]*"Addr: address" ]] || {
+      echo "Didn't update host as expected";
+      return 1
+    }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+ara_test_set_ipv6_for_hosts()
+{
+  local res
+  local err
+  unset ipv4
+  unset ipv6
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    zone_id="my.zone"
+    update_record() { echo "$@"; }
+    out=$(set_ipv6_for_hosts "host1 host2" address 2>&1)
+
+    [[ "$out" =~ "my.zone host1 address AAAA"[[:space:]]"my.zone host2 address AAAA" ]] || {
+      echo "Didn't update host as expected";
+      return 1
+    }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+ara_test_set_ipv4_for_hosts()
+{
+  local res
+  local err
+  unset ipv4
+  unset ipv6
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    zone_id="my.zone"
+    update_record() { echo "$@"; }
+    out=$(set_ipv4_for_hosts "host1 host2" address 2>&1)
+    [[ "$out" =~ "my.zone host1 address A"[[:space:]]"my.zone host2 address A" ]] || {
+      echo "Didn't update host as expected";
+      return 1
+    }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+parse_args "$@"
+
+echo "RUN tests" >&2
+tests=$(set | grep '^ara_test_.*()' | awk '{ print $1 }')
+slow_tests=$(set | grep '^ara_slow_test_.*()' | awk '{ print $1 }')
+
+if [[ "$run_slow_tests" ]]; then
   tests="$tests $slow_tests"
+fi
+
+if [[ "$test_only" ]]; then
+  tests=$(echo "$test_only" | sed -e 's/\<test_/ara_test_/g' -e 's/\<slow_test_/ara_slow_test_/g')
 fi
 
 for t in $tests; do

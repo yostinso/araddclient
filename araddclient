@@ -193,26 +193,6 @@ call_api()
   "${cmd[@]}"
 }
 
-set_ipv6_for_hosts()
-{
-  local hosts="$1"
-  local ipv6="$2"
-  if [ $verbose ]; then echo "Setting IPv6" >&2; fi
-  for host in $hosts; do
-    set_ipv6_addr $zone_id $host $ipv6
-  done
-  if [ $verbose ]; then echo "" >&2; fi
-}
-
-set_ipv4_for_hosts()
-{
-  if [ $verbose ]; then echo "Setting IPv4" >&2; fi
-  for host in $hosts; do
-    set_ipv4_addr $zone_id $host $ipv4
-  done
-  if [ $verbose ]; then echo "" >&2; fi
-}
-
 get_zone()
 {
   local zone_name="$1"
@@ -222,7 +202,7 @@ get_zone()
   if [ $verbose ]; then echo "  Found $result" >&2; echo "" >&2; fi
   echo $result
   if [[ -z $result ]]; then
-    echo "Unable get get Cloudlfare zone ID" >&2
+    echo "Unable to get Cloudlfare zone ID" >&2
     return 1
   else
     return 0
@@ -311,6 +291,28 @@ update_record()
   fi
 }
 
+set_ipv6_for_hosts()
+{
+  local hosts="$1"
+  local ipv6="$2"
+  if [ $verbose ]; then echo "Setting IPv6" >&2; fi
+  for host in $hosts; do
+    set_ipv6_addr $zone_id $host $ipv6
+  done
+  if [ $verbose ]; then echo "" >&2; fi
+}
+
+set_ipv4_for_hosts()
+{
+  local hosts="$1"
+  local ipv4="$2"
+  if [ $verbose ]; then echo "Setting IPv4" >&2; fi
+  for host in $hosts; do
+    set_ipv4_addr $zone_id $host $ipv4
+  done
+  if [ $verbose ]; then echo "" >&2; fi
+}
+
 set_ipv6_addr()
 {
   local zone_id="$1"
@@ -390,6 +392,6 @@ if [[ $(basename "$0") == "araddclient" ]]; then
     set_ipv6_for_hosts "$hosts" "$ipv6"
   fi
   if [[ $use_v4 == "yes" ]]; then
-    set_ipv6_for_hosts "$hosts" "$ipv6"
+    set_ipv4_for_hosts "$hosts" "$ipv4"
   fi
 fi
