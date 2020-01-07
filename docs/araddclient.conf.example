@@ -6,6 +6,7 @@ password='<password>'
 zone=example.com
 hosts=example.com
 update_frequency=300 # seconds
+allow_create=no
 
 use_v4=yes
 v4_method=meraki

@@ -409,6 +409,75 @@ ara_test_update_record()
   [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
 }
 
+ara_test_create_missing_record_no_allow_create()
+{
+  local res
+  local err
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    local allow_create="no"
+    should_update() { return 0; }
+    get_record() { echo ""; }
+    call_api() { echo '{ "success": true }'; }
+    touch_host() { return 0; }
+    out=$(update_record my.zone my.host address AAAA 2>&1)
+
+    [[ "$out" != "Couldn't find host my.host for zone my.zone" ]] || {
+      echo "Didn't update host as expected";
+      return 1
+    }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+ara_test_create_missing_record_allow_create()
+{
+  local res
+  local err
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    local allow_create="yes"
+    should_update() { return 0; }
+    get_record() { echo ""; }
+    call_api() { echo '{ "success": true }'; }
+    touch_host() { return 0; }
+    out=$(update_record my.zone my.host address AAAA 2>&1)
+
+    [[ "$out" =~ "Zone: my.zone"[[:space:]]*"Host: my.host"[[:space:]]*"Addr: address" ]] || {
+      echo "Didn't create host as expected";
+      return 1
+    }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
+ara_test_create_record()
+{
+  local res
+  local err
+  # Subshell trick to avoid overwriting methods
+  err=$(
+    local api_args
+    should_update() { return 0; }
+    get_record() { echo ""; }
+    call_api() { echo '{ "success": true }'; }
+    touch_host() { return 0; }
+    out=$(create_record my.zone my.host address AAAA 2>&1)
+
+    [[ "$out" =~ "Zone: my.zone"[[:space:]]*"Host: my.host"[[:space:]]*"Addr: address" ]] || {
+      echo "Didn't create host as expected";
+      return 1
+    }
+    return 0
+  )
+  res=$?
+  [[ $res -eq 0 ]] || { lasterr="$err"; return $res; }
+}
+
 ara_test_set_ipv6_for_hosts()
 {
   local res

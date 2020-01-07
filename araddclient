@@ -17,6 +17,7 @@ print_help()
   echo "login=your@email.here" >&2
   echo "state_dir=/tmp          # Where to store state (default /var/lib/araddclient)" >&2
   echo "update_frequency=300    # How frequently to send an IP update (when changed); default is 300 seconds." >&2
+  echo "allow_create=no         # If a host entry doesn't yet exist, create one" >&2
   echo "" >&2
   echo "zone=myserver.com" >&2
   echo "hosts=\"myserver.com www.myserver.com\"" >&2
@@ -273,9 +274,14 @@ update_record()
   echo "    Zone: $zone_id" >&2
   echo "    Host: $host_id" >&2
   echo "    Addr: $addr" >&2
-  if [[ -z "$host_id" ]]; then
+  if [[ -z "$host_id" || "$host_id" == "null" ]]; then
     echo "Couldn't find host $host_name for zone $zone_id"
-    return 1
+    if [[ $allow_create == "yes" ]]; then
+      create_record "$zone_id" "$host_name" "$addr" "$record_type"
+      return $?
+    else
+      return 1
+    fi
   else
     local url="zones/$zone_id/dns_records/$host_id"
     local data='{"type":"'$record_type'","name":"'$host_name'","content":"'$addr'"}'
@@ -286,6 +292,35 @@ update_record()
       touch_host "$host_name" $record_type "$addr"
     else
       echo "Error updating record" >&2
+      echo "$result" | jq '.errors' >&2
+    fi
+  fi
+}
+
+create_record()
+{
+  local zone_id="$1"
+  local host_name="$2"
+  local addr="$3"
+  local record_type="$4"
+
+  local host_id=$(get_record $zone_id $record_type "$host_name")
+  echo "    Zone: $zone_id" >&2
+  echo "    Host: $host_name" >&2
+  echo "    Addr: $addr" >&2
+  if [[ ! -z "$host_id" && "$host_id" != "null" ]]; then
+    echo "Found unexpected existing $host_name for zone $zone_id"
+    return 1
+  else
+    local url="zones/$zone_id/dns_records"
+    local data='{"type":"'$record_type'","name":"'$host_name'","content":"'$addr'"}'
+    if [ $verbose ]; then echo "Created record: $data" >&2; fi
+    result=$(call_api "$url" POST $data)
+    if [[ $(echo "$result" | jq '.success') == "true" ]]; then
+      echo "Created $host_name $record_type to $addr" >&2
+      touch_host "$host_name" $record_type "$addr"
+    else
+      echo "Error creating record" >&2
       echo "$result" | jq '.errors' >&2
     fi
   fi

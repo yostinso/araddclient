@@ -39,6 +39,7 @@ state_dir=/tmp          # Where to store state; default is /var/lib/araddclient.
 
 use_v4=yes              # Attempt to update A records. Default yes.
 v4_method=icanhazip     # icanhazip (default), meraki, or a custom function.
+allow_create=no         # If a host entry doesn't yet exist, create one
 
 use_v6=no               # Attempt to update AAAA records. Default no.
 v6_method=ifaddr        # ifaddr (default), icanhazip, or a custom function.

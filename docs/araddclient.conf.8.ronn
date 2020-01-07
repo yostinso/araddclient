@@ -24,6 +24,7 @@ hosts="myserver.com www.myserver.com"
 
 # Configuring updates
 update_frequency=300    # How frequently to send an IP update (when changed); default is 300 seconds.
+allow_create=no         # If a host entry doesn't yet exist, create one
 state_dir=/tmp          # Where to store state; default is /var/lib/araddclient.
 
 use_v4=yes              # Attempt to update A records. Default yes.
