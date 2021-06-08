@@ -13,9 +13,13 @@ araddclient.conf(8) -- configuration for araddclient(8)
 # Cloudflare server (probably never changes)
 server=api.cloudflare.com/client/v4
 
+# Choose ONE OF login/password or token
 # Cloudflare credentials (email and auth key)
 login=your@email.here
 password=aaabbbeeefffccceeefff
+
+# Cloudflare credentials (API key)
+token=AbA9A9AAbA9A9AAbA9A9AAbA9A9A9999AbA9A9A9
 
 # Cloudflare zone your records live in
 zone=myserver.com

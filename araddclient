@@ -66,20 +66,26 @@ load_conf()
 
 clear_conf()
 {
-  for var in server login password zone hosts use_v6 use_v4 v4_method v6_method v6_if; do
+  for var in server login password token zone hosts use_v6 use_v4 v4_method v6_method v6_if; do
     unset $var
   done
 }
 
 verify_conf()
 {
-  for var in server login password zone hosts; do
+  for var in server zone hosts; do
     eval val=\$$var
     if [[ -z "$val" ]]; then
       echo "Missing configuration option: $var" >&2
       return 1
     fi
   done
+  if [[ -z "$token" ]]; then
+    if [[ -z "$login" || -z "$password" ]]; then
+      echo "No token= or login=/password= credentials provided" >&2
+      return 1
+    fi
+  fi
   if [[ $use_v6 == "yes" ]]; then
     if [[ -z "$v6_if" && "$v6_method" == "ifaddr" ]]; then
       echo "use_v6 with v6_method=$v6_method requires v6_if to be defined" >&2
@@ -170,9 +176,11 @@ call_api()
   local cmd=(
     curl
     -X $method "https://$server/$url"
-    -H "X-Auth-Email: $login"
     -H "Content-Type: application/json"
   )
+  if [[ -z "$token" ]]; then
+    cmd+=( -H "X-Auth-Email: $login" )
+  fi
 
   case $verbose in
     2)
@@ -190,7 +198,11 @@ call_api()
     cmd+=(--data "$data")
   fi
   if [ $verbose ]; then echo "  ${cmd[@]}" >&2; fi
-  cmd+=( -H "X-Auth-Key: $password" )
+  if [[ -z "$token" ]]; then
+    cmd+=( -H "X-Auth-Key: $password" )
+  else
+    cmd+=( -H "Authorization: Bearer $token" )
+  fi
   "${cmd[@]}"
 }
 

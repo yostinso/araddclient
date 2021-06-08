@@ -3,6 +3,8 @@
 server=api.cloudflare.com/client/v4
 login=email@example.com
 password='<password>'
+# Instead of login/password, you can supply an API token
+# token='<token>'
 zone=example.com
 hosts=example.com
 update_frequency=300 # seconds

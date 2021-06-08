@@ -17,6 +17,7 @@ help()
   echo "  -r    Create new version at HEAD and update the release tag" >&2
   echo "  -u    Don't delete the build folder before running" >&2
   echo "  -v    Increment the version by n.nn instead of $version_increment" >&2
+  echo "  -us   Skip signing" >&2
   echo ""
 }
 
@@ -35,6 +36,10 @@ parse_args()
       -v)
         version_increment=$2
         shift 2
+        ;;
+      -us)
+        skip_signing="-uc -us"
+        shift
         ;;
       *)
         help
@@ -192,7 +197,7 @@ do_dh_make()
     cd "$dir" &&
       DEBEMAIL="$DEBEMAIL" \
       DEBFULLNAME="$DEBFULLNAME" \
-      dh_make --copyright gpl -i --createorig
+      dh_make -y --copyright gpl -i --createorig
   )
   [[ -f "$debdir/README.Debian" ]] || {
     echo "dh_make aborted or failed";
@@ -256,7 +261,7 @@ gpg-agent || gpg-agent --daemon
   rm debian/*.ex # Clean up example files
   DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc -I -i" \
   DEBUILD_LINTIAN_OPTS="-i -I --show-overrides --profile debian" \
-  debuild
+  debuild $skip_signing
 ) || exit
 
 # Clean up root folder and move generated files into debbuild
