@@ -17,9 +17,10 @@ WORKDIR /installs
 COPY --from=build_result /src/debbuild/araddclient*.deb ./araddclient.deb
 ARG UBNT_MIRROR=http://mirror.math.ucdavis.edu/ubuntu/
 RUN sed -i -e "s|http://archive.ubuntu.com/ubuntu/|$UBNT_MIRROR|" /etc/apt/sources.list
-RUN apt-get update && apt-get install -y jq curl dnsutils iproute2 python && dpkg -i araddclient.deb && rm -rf /var/cache/apt/lists
+RUN apt-get update && apt-get install -y jq curl dnsutils iproute2 && dpkg -i araddclient.deb && rm -rf /var/cache/apt/lists
 WORKDIR /
 RUN rm -r installs
-COPY container_files/systemctl.py /usr/bin/systemctl
-RUN chmod 755 /usr/bin/systemctl
-CMD ["/usr/bin/systemctl"]
+COPY container_files/entry.sh /
+# default sleep period 300 seconds
+CMD [ "300" ]
+ENTRYPOINT [ "/entry.sh" ]
